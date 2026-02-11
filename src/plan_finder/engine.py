@@ -164,6 +164,13 @@ async def run_discovery_loop(
                         throttle.reinit()
                     iteration -= 1
                     continue
+                if "prompt is too long" in err_msg.lower():
+                    display.console.print(
+                        f"\n[yellow]Session context too large. Resetting session and retrying...[/yellow]"
+                    )
+                    session_id = None
+                    iteration -= 1
+                    continue
                 raise
 
             # Capture session_id for next iteration
