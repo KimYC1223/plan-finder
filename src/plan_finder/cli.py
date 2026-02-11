@@ -44,7 +44,7 @@ def main(
         bool,
         typer.Option(
             "--auto",
-            help="Auto mode: find plans unattended and save to pending/. Requires --prompt. Throttle auto-enabled.",
+            help="Auto mode: find plans unattended and save to pending/. Requires --prompt.",
         ),
     ] = False,
     session_hours: Annotated[
@@ -75,11 +75,11 @@ def main(
             help="Stop after this time (HH:MM). e.g. --stop-at 07:30",
         ),
     ] = None,
-    throttle: Annotated[
+    no_throttle: Annotated[
         bool,
         typer.Option(
-            "--throttle",
-            help="Enable token throttling (auto-enabled in --auto mode).",
+            "--no-throttle",
+            help="Disable cost-based throttling (enabled by default).",
         ),
     ] = False,
     clear_rejections: Annotated[
@@ -172,7 +172,7 @@ def main(
             cwd=cwd,
             auto=auto,
             throttle=session_throttle,
-            throttle_enabled=auto or throttle,
+            throttle_enabled=not no_throttle,
             resume=not no_resume,
             stop_at=stop_at_time,
         )

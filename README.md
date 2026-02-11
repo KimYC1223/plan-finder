@@ -30,8 +30,7 @@ uv sync
 cd ~/my-project
 uv run --project ~/plan-finder plan-finder \
   --prompt "코드베이스에서 임의의 개선점을 찾아서 제안해줘. 코드 품질, 버그, 리팩토링, 성능 등 어떤 종류도 좋다." \
-  --max 50 \
-  --throttle
+  --max 50
 ```
 
 Claude가 코드베이스를 분석해서 개선점을 하나씩 찾아 보여준다. 각 plan에 대해:
@@ -71,7 +70,7 @@ cd ~/my-project
 |---|---|---|
 | 사용자 개입 | 매 plan마다 승인/거절/수정 | 없음 |
 | 저장 위치 | `~/claude-reports/{프로젝트}/` | `~/claude-reports/{프로젝트}/pending/` |
-| 쓰로틀 | 꺼짐 (`--throttle`로 활성화 가능) | 자동 활성화 |
+| 쓰로틀 | 기본 활성 (`--no-throttle`로 비활성화 가능) | 기본 활성 |
 | 용도 | 직접 보면서 검토 | 야간/무인 실행 |
 
 ## 쓰로틀링
@@ -114,7 +113,7 @@ Cost: $12.50/$40 (31%) | Session: 52% (2.4h left) | 🟢 Plenty (pace 33% vs tim
 | `--max` | `-m` | 최대 반복 횟수 | 무제한 |
 | `--report-dir` | `-d` | 리포트 저장 경로 | `~/claude-reports/{프로젝트명}` |
 | `--auto` | | 자동 모드 | 꺼짐 |
-| `--throttle` | | 쓰로틀링 활성화 (auto에서는 자동) | 꺼짐 |
+| `--no-throttle` | | 쓰로틀링 비활성화 | 꺼짐 (기본 활성) |
 | `--session-budget` | | 세션 예산 (USD) | 40.0 |
 | `--session-hours` | | 세션 시간 (ccusage 없을 때 fallback) | 5.0 |
 | `--stop-at` | | 지정 시각에 종료 (HH:MM) | 없음 |
