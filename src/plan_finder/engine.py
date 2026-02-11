@@ -1,0 +1,268 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from . import display
+from .discovery import discover_plan
+from .prompts import build_prompt
+from .reporter import save_plan
+from .state import StateManager
+from .throttle import SessionThrottle
+
+
+QUIET_START = 22  # 22:00
+QUIET_END = 3     # 03:00
+
+
+async def _wait_if_quiet_hours() -> None:
+    """Sleep until quiet hours (22:00~03:00) are over."""
+    import asyncio
+    from datetime import datetime, timedelta
+
+    now = datetime.now()
+    hour = now.hour
+
+    if hour >= QUIET_START or hour < QUIET_END:
+        # Calculate wake time: next 03:00
+        wake = now.replace(hour=QUIET_END, minute=0, second=0, microsecond=0)
+        if hour >= QUIET_START:
+            wake += timedelta(days=1)
+        wait_secs = (wake - now).total_seconds()
+        display.console.print(
+            f"\n[dim]Quiet hours (22:00~03:00). "
+            f"Sleeping until {wake.strftime('%H:%M')} "
+            f"({wait_secs / 60:.0f} min)...[/dim]"
+        )
+        await asyncio.sleep(wait_secs)
+        display.console.print("[dim]Quiet hours over, resuming...[/dim]")
+
+
+async def _wait_for_next_session(throttle: SessionThrottle | None) -> None:
+    """Wait until the current session ends, then return."""
+    import asyncio
+    from datetime import datetime
+
+    if throttle:
+        now = datetime.now()
+        remaining = (throttle.session_end - now).total_seconds()
+        if remaining > 0:
+            display.console.print(
+                f"[dim]Session ends at {throttle.session_end.strftime('%H:%M')}. "
+                f"Waiting {remaining / 60:.0f} min...[/dim]"
+            )
+            await asyncio.sleep(remaining + 60)  # +1min buffer
+            return
+
+    # No throttle or session already ended: wait 5 min and retry
+    display.console.print("[dim]Waiting 5 min before retrying...[/dim]")
+    await asyncio.sleep(300)
+
+
+async def run_discovery_loop(
+    plan_prompt: str,
+    max_iterations: int | None = None,
+    report_dir: Path | None = None,
+    cwd: str | None = None,
+    auto: bool = False,
+    throttle: SessionThrottle | None = None,
+    throttle_enabled: bool = False,
+    resume: bool = True,
+    stop_at: object | None = None,  # datetime.time
+) -> None:
+    """Main discovery loop.
+
+    When auto=False (interactive):
+      find plan -> show -> user approves/rejects -> repeat
+
+    When auto=True (unattended):
+      find plan -> save to pending/ -> repeat
+
+    When throttle is set, each iteration checks the time-proportional
+    budget before querying Claude.
+
+    When resume=True, subsequent iterations resume the same Claude session
+    to preserve codebase analysis context between iterations.
+    """
+    import os
+
+    effective_cwd = cwd or os.getcwd()
+    project_name = Path(effective_cwd).name
+
+    if report_dir is None:
+        report_dir = Path.home() / "claude-reports" / project_name
+
+    state_mgr = StateManager(report_dir)
+    state_mgr.load()
+
+    iteration = 0
+    session_approved = 0
+    session_rejected = 0
+    session_pending = 0
+    session_id: str | None = None
+
+    try:
+        while True:
+            iteration += 1
+
+            if max_iterations and iteration > max_iterations:
+                display.console.print(
+                    f"\n[yellow]Reached max iterations ({max_iterations}). Stopping.[/yellow]"
+                )
+                break
+
+            # Stop at specified time
+            if stop_at:
+                from datetime import datetime
+                now = datetime.now().time()
+                if now >= stop_at:
+                    display.console.print(
+                        f"\n[yellow]Reached stop time ({stop_at.strftime('%H:%M')}). Stopping.[/yellow]"
+                    )
+                    break
+
+            # Quiet hours: no queries 22:00~03:00
+            await _wait_if_quiet_hours()
+
+            # Throttle: wait if consuming budget faster than time
+            if throttle_enabled and throttle:
+                await throttle.wait_if_needed()
+
+            display.show_discovery_start(iteration)
+            if throttle:
+                display.console.print(f"  [dim]{throttle.status_line()}[/dim]")
+            if session_id and resume:
+                display.console.print(
+                    f"  [dim]Resuming session {session_id[:8]}...[/dim]"
+                )
+
+            prompt = build_prompt(plan_prompt, state_mgr.state.rejected_plans)
+
+            resume_id = session_id if resume else None
+
+            try:
+                with display.live_status() as status:
+
+                    def on_activity(detail: str) -> None:
+                        status.update(f"[dim]{detail}[/dim]")
+
+                    result = await discover_plan(
+                        prompt=prompt,
+                        cwd=effective_cwd,
+                        resume_session_id=resume_id,
+                        on_activity=on_activity,
+                    )
+            except Exception as e:
+                err_msg = str(e)
+                if "hit your limit" in err_msg or "rate limit" in err_msg.lower():
+                    display.console.print(
+                        f"\n[yellow]Rate limit reached. Waiting for next session...[/yellow]"
+                    )
+                    await _wait_for_next_session(throttle)
+                    # New session: reset resume context and re-init throttle
+                    session_id = None
+                    if throttle:
+                        throttle.reinit()
+                    iteration -= 1
+                    continue
+                raise
+
+            # Capture session_id for next iteration
+            if result.session_id:
+                session_id = result.session_id
+
+            # Track usage for throttle
+            if throttle:
+                throttle.add_usage(result.cost_usd, result.total_tokens, result.model)
+
+            if result.plan is None:
+                display.console.print(
+                    "\n[red]Failed to get structured output from Claude. Retrying...[/red]"
+                )
+                iteration -= 1
+                continue
+
+            if result.plan.found_nothing:
+                display.show_no_more_plans()
+                break
+
+            display.show_plan(result.plan, iteration)
+
+            if auto:
+                filepath = save_plan(
+                    result.plan, iteration, report_dir, pending=True
+                )
+                state_mgr.add_pending(result.plan)
+                session_pending += 1
+                display.show_saved_pending(filepath)
+            else:
+                current_plan = result.plan
+                while True:
+                    action, feedback = display.ask_approval()
+
+                    if action == "approve":
+                        filepath = save_plan(current_plan, iteration, report_dir)
+                        state_mgr.record_approval(current_plan)
+                        session_approved += 1
+                        display.show_saved(filepath)
+                        break
+                    elif action == "reject":
+                        state_mgr.add_rejection(current_plan, feedback)
+                        session_rejected += 1
+                        display.show_rejected(current_plan.title)
+                        break
+                    else:  # revise
+                        display.console.print(
+                            "[cyan]Sending feedback to Claude...[/cyan]"
+                        )
+                        revision_prompt = (
+                            f"I have feedback on the plan you just proposed "
+                            f"(\"{current_plan.title}\"):\n\n"
+                            f"{feedback}\n\n"
+                            f"Please revise the plan based on this feedback, "
+                            f"or propose a completely different plan if the "
+                            f"feedback invalidates the original idea."
+                        )
+                        try:
+                            with display.live_status() as status:
+
+                                def on_revise_activity(detail: str) -> None:
+                                    status.update(f"[dim]{detail}[/dim]")
+
+                                revision = await discover_plan(
+                                    prompt=revision_prompt,
+                                    cwd=effective_cwd,
+                                    resume_session_id=session_id,
+                                    on_activity=on_revise_activity,
+                                )
+                        except Exception as e:
+                            err_msg = str(e)
+                            if "hit your limit" in err_msg or "rate limit" in err_msg.lower():
+                                display.console.print(
+                                    "\n[yellow]Rate limit reached during revision.[/yellow]"
+                                )
+                                await _wait_for_next_session(throttle)
+                                session_id = None
+                                if throttle:
+                                    throttle.reinit()
+                                break
+                            raise
+
+                        if revision.session_id:
+                            session_id = revision.session_id
+                        if throttle:
+                            throttle.add_usage(revision.cost_usd, revision.total_tokens, revision.model)
+
+                        if revision.plan and not revision.plan.found_nothing:
+                            current_plan = revision.plan
+                            display.show_plan(current_plan, iteration)
+                            # Loop back to ask y/n/r again
+                        else:
+                            display.console.print(
+                                "\n[red]Revision failed to produce a plan.[/red]"
+                            )
+                            break
+
+    except KeyboardInterrupt:
+        display.console.print("\n[yellow]Interrupted by user.[/yellow]")
+
+    display.show_summary(session_approved, session_rejected, session_pending)

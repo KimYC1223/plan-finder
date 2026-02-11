@@ -1,0 +1,21 @@
+[project]
+name = "plan-finder"
+version = "0.1.0"
+description = "Iterative AI-powered codebase improvement plan discovery tool"
+requires-python = ">=3.10"
+dependencies = [
+    "claude-agent-sdk>=0.1.30",
+    "typer>=0.15.0",
+    "rich>=13.0.0",
+    "pydantic>=2.0.0",
+]
+
+[project.scripts]
+plan-finder = "plan_finder.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/plan_finder"]
