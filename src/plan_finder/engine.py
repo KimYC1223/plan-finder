@@ -13,6 +13,33 @@ from .throttle import SessionThrottle
 QUIET_START = 22  # 22:00
 QUIET_END = 3     # 03:00
 
+# Errors that indicate rate limit / session exhaustion
+_RATE_LIMIT_PATTERNS = [
+    "hit your limit",
+    "rate limit",
+    "rate_limit",
+    "overloaded",
+]
+
+MAX_CONSECUTIVE_ERRORS = 3
+
+
+def _is_rate_limit_error(err_msg: str) -> bool:
+    """Check if error message indicates a rate limit."""
+    lower = err_msg.lower()
+    return any(p in lower for p in _RATE_LIMIT_PATTERNS)
+
+
+def _is_retriable_error(err_msg: str) -> bool:
+    """Check if error is likely retriable (e.g. exit code 1 from CLI)."""
+    lower = err_msg.lower()
+    return (
+        "exit code 1" in lower
+        or "command failed" in lower
+        or "connection" in lower
+        or "timeout" in lower
+    )
+
 
 async def _wait_if_quiet_hours() -> None:
     """Sleep until quiet hours (22:00~03:00) are over."""
@@ -99,6 +126,7 @@ async def run_discovery_loop(
     session_rejected = 0
     session_pending = 0
     session_id: str | None = None
+    consecutive_errors = 0
 
     try:
         while True:
@@ -153,15 +181,15 @@ async def run_discovery_loop(
                     )
             except Exception as e:
                 err_msg = str(e)
-                if "hit your limit" in err_msg or "rate limit" in err_msg.lower():
+                if _is_rate_limit_error(err_msg):
                     display.console.print(
                         f"\n[yellow]Rate limit reached. Waiting for next session...[/yellow]"
                     )
                     await _wait_for_next_session(throttle)
-                    # New session: reset resume context and re-init throttle
                     session_id = None
                     if throttle:
                         throttle.reinit()
+                    consecutive_errors = 0
                     iteration -= 1
                     continue
                 if "prompt is too long" in err_msg.lower():
@@ -171,7 +199,45 @@ async def run_discovery_loop(
                     session_id = None
                     iteration -= 1
                     continue
-                raise
+                # Retriable errors (e.g. exit code 1 from CLI = likely rate limit)
+                if _is_retriable_error(err_msg):
+                    consecutive_errors += 1
+                    display.console.print(
+                        f"\n[yellow]Error (attempt {consecutive_errors}/{MAX_CONSECUTIVE_ERRORS}): "
+                        f"{err_msg[:120]}[/yellow]"
+                    )
+                    if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
+                        display.console.print(
+                            f"\n[red]Too many consecutive errors. "
+                            f"Treating as rate limit and waiting for next session...[/red]"
+                        )
+                        await _wait_for_next_session(throttle)
+                        session_id = None
+                        if throttle:
+                            throttle.reinit()
+                        consecutive_errors = 0
+                        iteration -= 1
+                        continue
+                    # Wait briefly and retry with fresh session
+                    display.console.print(
+                        "[dim]Resetting session and retrying in 30s...[/dim]"
+                    )
+                    import asyncio
+                    await asyncio.sleep(30)
+                    session_id = None
+                    iteration -= 1
+                    continue
+                # Unknown error: log and stop gracefully
+                display.console.print(
+                    f"\n[red]Unexpected error: {err_msg[:200]}[/red]"
+                )
+                display.console.print(
+                    "[yellow]Stopping gracefully.[/yellow]"
+                )
+                break
+
+            # Success: reset error counter
+            consecutive_errors = 0
 
             # Capture session_id for next iteration
             if result.session_id:
@@ -243,16 +309,22 @@ async def run_discovery_loop(
                                 )
                         except Exception as e:
                             err_msg = str(e)
-                            if "hit your limit" in err_msg or "rate limit" in err_msg.lower():
+                            if _is_rate_limit_error(err_msg) or _is_retriable_error(err_msg):
                                 display.console.print(
-                                    "\n[yellow]Rate limit reached during revision.[/yellow]"
+                                    f"\n[yellow]Error during revision: {err_msg[:120]}[/yellow]"
+                                )
+                                display.console.print(
+                                    "[yellow]Waiting for next session...[/yellow]"
                                 )
                                 await _wait_for_next_session(throttle)
                                 session_id = None
                                 if throttle:
                                     throttle.reinit()
                                 break
-                            raise
+                            display.console.print(
+                                f"\n[red]Unexpected error during revision: {err_msg[:200]}[/red]"
+                            )
+                            break
 
                         if revision.session_id:
                             session_id = revision.session_id
