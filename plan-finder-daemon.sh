@@ -24,24 +24,7 @@ run_daemon() {
         rm -f "$HOME/.plan-finder-daemon.cwd"
     fi
 
-    log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"; }
-
-    if [ -n "$TARGET_TIME" ]; then
-        log "Waiting until $TARGET_TIME to start..."
-        while true; do
-            NOW=$(date '+%H:%M')
-            if [ "$NOW" = "$TARGET_TIME" ]; then
-                break
-            fi
-            sleep 30
-        done
-    fi
-
-    log "Starting plan-finder..."
-
-    export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
-
-    # Read args from file (one arg per line)
+    # Read args from file (one arg per line) — save before rm
     PF_ARGS=()
     if [ -f "$ARGS_FILE" ]; then
         while IFS= read -r line; do
@@ -50,11 +33,40 @@ run_daemon() {
         rm -f "$ARGS_FILE"
     fi
 
-    cd "${CWD:-$HOME}"
-    uv run --project "$SCRIPT_DIR" plan-finder "${PF_ARGS[@]}" >> "$LOG_FILE" 2>&1
-    EXIT_CODE=$?
+    log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"; }
 
-    log "plan-finder finished with exit code $EXIT_CODE"
+    export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+
+    while true; do
+        # Wait until target time if set
+        if [ -n "$TARGET_TIME" ]; then
+            log "Waiting until $TARGET_TIME to start..."
+            while true; do
+                NOW=$(date '+%H:%M')
+                if [ "$NOW" = "$TARGET_TIME" ]; then
+                    break
+                fi
+                sleep 30
+            done
+        fi
+
+        log "Starting plan-finder..."
+
+        cd "${CWD:-$HOME}"
+        uv run --project "$SCRIPT_DIR" plan-finder "${PF_ARGS[@]}" >> "$LOG_FILE" 2>&1
+        EXIT_CODE=$?
+
+        log "plan-finder finished with exit code $EXIT_CODE"
+
+        # If no target time, run once and exit (backwards compat)
+        if [ -z "$TARGET_TIME" ]; then
+            break
+        fi
+
+        # Sleep past the current minute to avoid re-triggering immediately
+        sleep 90
+    done
+
     rm -f "$PID_FILE"
 }
 
