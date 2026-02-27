@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from rich.markup import escape as rich_escape
+
 from . import display
 from .discovery import discover_plan
 from .prompts import build_prompt
@@ -238,7 +240,7 @@ async def run_discovery_loop(
                     continue
                 # Unknown error: log and stop gracefully
                 display.console.print(
-                    f"\n[red]Unexpected error: {err_msg[:200]}[/red]"
+                    f"\n[red]Unexpected error: {rich_escape(err_msg[:200])}[/red]"
                 )
                 display.console.print(
                     "[yellow]Stopping gracefully.[/yellow]"
@@ -320,7 +322,7 @@ async def run_discovery_loop(
                             err_msg = str(e)
                             if _is_rate_limit_error(err_msg) or _is_retriable_error(err_msg):
                                 display.console.print(
-                                    f"\n[yellow]Error during revision: {err_msg[:120]}[/yellow]"
+                                    f"\n[yellow]Error during revision: {rich_escape(err_msg[:120])}[/yellow]"
                                 )
                                 display.console.print(
                                     "[yellow]Waiting for next session...[/yellow]"
@@ -331,7 +333,7 @@ async def run_discovery_loop(
                                     throttle.reinit()
                                 break
                             display.console.print(
-                                f"\n[red]Unexpected error during revision: {err_msg[:200]}[/red]"
+                                f"\n[red]Unexpected error during revision: {rich_escape(err_msg[:200])}[/red]"
                             )
                             break
 
