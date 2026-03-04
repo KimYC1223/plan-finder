@@ -182,7 +182,7 @@ async def run_discovery_loop(
                 with display.live_status() as status:
 
                     def on_activity(detail: str) -> None:
-                        status.update(f"[dim]{detail}[/dim]")
+                        status.update(f"[dim]{rich_escape(detail)}[/dim]")
 
                     result = await discover_plan(
                         prompt=prompt,
@@ -310,7 +310,7 @@ async def run_discovery_loop(
                             with display.live_status() as status:
 
                                 def on_revise_activity(detail: str) -> None:
-                                    status.update(f"[dim]{detail}[/dim]")
+                                    status.update(f"[dim]{rich_escape(detail)}[/dim]")
 
                                 revision = await discover_plan(
                                     prompt=revision_prompt,

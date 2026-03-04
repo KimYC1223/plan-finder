@@ -4,6 +4,7 @@ from pathlib import Path
 
 from rich.console import Console
 from rich.live import Live
+from rich.markup import escape as rich_escape
 from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 from rich.spinner import Spinner
@@ -22,7 +23,7 @@ def show_plan(plan: DiscoveredPlan, iteration: int) -> None:
     table.add_row("Category", plan.category.value)
     table.add_row("Priority", f"{plan.priority}/5")
     table.add_row("Effort", plan.estimated_effort.value)
-    files_str = ", ".join(plan.files_affected[:5])
+    files_str = ", ".join(rich_escape(f) for f in plan.files_affected[:5])
     if len(plan.files_affected) > 5:
         files_str += "..."
     table.add_row("Files", files_str)
@@ -30,8 +31,9 @@ def show_plan(plan: DiscoveredPlan, iteration: int) -> None:
     console.print()
     console.print(
         Panel(
-            f"[bold]{plan.title}[/bold]\n\n{plan.description}\n\n"
-            f"[dim]Rationale:[/dim] {plan.rationale}",
+            f"[bold]{rich_escape(plan.title)}[/bold]\n\n"
+            f"{rich_escape(plan.description)}\n\n"
+            f"[dim]Rationale:[/dim] {rich_escape(plan.rationale)}",
             title=f"[green]Plan #{iteration}[/green]",
             border_style="green",
         )
@@ -41,12 +43,12 @@ def show_plan(plan: DiscoveredPlan, iteration: int) -> None:
     if plan.implementation_steps:
         console.print("\n[bold]Implementation Steps:[/bold]")
         for i, step in enumerate(plan.implementation_steps, 1):
-            console.print(f"  {i}. {step}")
+            console.print(f"  {i}. {rich_escape(step)}")
 
     if plan.risks:
         console.print("\n[bold yellow]Risks:[/bold yellow]")
         for risk in plan.risks:
-            console.print(f"  - {risk}")
+            console.print(f"  - {rich_escape(risk)}")
 
 
 def _flush_stdin() -> None:
@@ -97,7 +99,7 @@ def show_saved_pending(filepath: Path) -> None:
 
 def show_rejected(title: str) -> None:
     console.print(
-        f"\n[bold red]Rejected:[/bold red] {title} "
+        f"\n[bold red]Rejected:[/bold red] {rich_escape(title)} "
         "(will be skipped in future iterations)"
     )
 
@@ -110,8 +112,11 @@ def show_rejected_list(rejected_plans: list[RejectionRecord]) -> None:
         f"\n[bold yellow]Previously rejected plans ({len(rejected_plans)}):[/bold yellow]"
     )
     for i, r in enumerate(rejected_plans, 1):
-        reason_str = f" — {r.reason}" if r.reason else ""
-        console.print(f"  [dim]{i}.[/dim] [{r.category}] {r.title}{reason_str}")
+        reason_str = f" — {rich_escape(r.reason)}" if r.reason else ""
+        console.print(
+            f"  [dim]{i}.[/dim] [{rich_escape(r.category)}] "
+            f"{rich_escape(r.title)}{reason_str}"
+        )
 
 
 def show_discovery_start(iteration: int) -> None:
@@ -145,7 +150,10 @@ class LiveStatus:
     def update(self, text: str) -> None:
         self._text = text
         if self._live:
-            self._live.update(self._render())
+            try:
+                self._live.update(self._render())
+            except Exception:
+                pass  # swallow markup errors in status display
 
     def __enter__(self) -> LiveStatus:
         self._live = Live(self._render(), console=console, refresh_per_second=8)
