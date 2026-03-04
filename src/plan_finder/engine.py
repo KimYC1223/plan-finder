@@ -203,7 +203,7 @@ async def run_discovery_loop(
                     consecutive_errors = 0
                     iteration -= 1
                     continue
-                if "prompt is too long" in err_msg.lower():
+                if "prompt is too long" in err_msg.lower() or "maximum buffer size" in err_msg.lower():
                     display.console.print(
                         f"\n[yellow]Session context too large. Resetting session and retrying...[/yellow]"
                     )
