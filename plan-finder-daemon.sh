@@ -41,13 +41,35 @@ run_daemon() {
         # Wait until target time if set
         if [ -n "$TARGET_TIME" ]; then
             log "Waiting until $TARGET_TIME to start..."
-            while true; do
-                NOW=$(date '+%H:%M')
-                if [ "$NOW" = "$TARGET_TIME" ]; then
-                    break
-                fi
+            # Calculate next occurrence of TARGET_TIME as epoch
+            TARGET_EPOCH=$(date -j -f "%Y-%m-%d %H:%M:%S" "$(date '+%Y-%m-%d') $TARGET_TIME:00" +%s 2>/dev/null)
+            CURRENT_EPOCH=$(date +%s)
+            # If target time already passed today, aim for tomorrow
+            if [ "$CURRENT_EPOCH" -ge "$TARGET_EPOCH" ]; then
+                TARGET_EPOCH=$((TARGET_EPOCH + 86400))
+                log "Target time passed today, next run at $(date -r "$TARGET_EPOCH" '+%Y-%m-%d %H:%M')"
+            fi
+            # Epoch-based wait: survives macOS sleep (date +%s always returns real time)
+            while [ "$(date +%s)" -lt "$TARGET_EPOCH" ]; do
                 sleep 30
             done
+
+            # Extract --stop-at from PF_ARGS to skip if we woke up too late
+            STOP_AT=""
+            for i in "${!PF_ARGS[@]}"; do
+                if [ "${PF_ARGS[$i]}" = "--stop-at" ]; then
+                    STOP_AT="${PF_ARGS[$((i+1))]}"
+                    break
+                fi
+            done
+            if [ -n "$STOP_AT" ]; then
+                STOP_EPOCH=$(date -j -f "%Y-%m-%d %H:%M:%S" "$(date -r "$TARGET_EPOCH" '+%Y-%m-%d') $STOP_AT:00" +%s 2>/dev/null)
+                # If stop time is before start time, it means stop is same day (e.g. start 03:00, stop 07:30)
+                if [ "$(date +%s)" -ge "$STOP_EPOCH" ]; then
+                    log "Woke up after stop time ($STOP_AT). Skipping today's run."
+                    continue
+                fi
+            fi
         fi
 
         log "Starting plan-finder..."
