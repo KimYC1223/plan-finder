@@ -39,7 +39,7 @@ def detect_session() -> dict:
     """
     try:
         json_result = subprocess.run(
-            ["ccusage", "blocks", "--json", "--active", "--offline"],
+            ["ccusage", "blocks", "--json", "--active"],
             capture_output=True,
             text=True,
             timeout=30,
