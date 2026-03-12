@@ -75,6 +75,13 @@ def main(
             help="Disable cost-based throttling (enabled by default).",
         ),
     ] = False,
+    model: Annotated[
+        Optional[str],
+        typer.Option(
+            "--model",
+            help="Claude model to use (e.g. claude-opus-4-6, claude-sonnet-4-5-20250929).",
+        ),
+    ] = None,
     clear_rejections: Annotated[
         bool,
         typer.Option(
@@ -167,6 +174,7 @@ def main(
             throttle_enabled=not no_throttle,
             resume=not no_resume,
             stop_at=stop_at_time,
+            model=model,
         )
     )
 

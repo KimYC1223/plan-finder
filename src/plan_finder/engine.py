@@ -97,6 +97,7 @@ async def run_discovery_loop(
     throttle_enabled: bool = False,
     resume: bool = True,
     stop_at: object | None = None,  # datetime.time
+    model: str | None = None,
 ) -> None:
     """Main discovery loop.
 
@@ -189,6 +190,7 @@ async def run_discovery_loop(
                         cwd=effective_cwd,
                         resume_session_id=resume_id,
                         on_activity=on_activity,
+                        model=model,
                     )
             except Exception as e:
                 err_msg = str(e)
@@ -317,6 +319,7 @@ async def run_discovery_loop(
                                     cwd=effective_cwd,
                                     resume_session_id=session_id,
                                     on_activity=on_revise_activity,
+                                    model=model,
                                 )
                         except Exception as e:
                             err_msg = str(e)

@@ -29,6 +29,7 @@ async def discover_plan(
     cwd: str | None = None,
     resume_session_id: str | None = None,
     on_activity: Callable[[str], None] | None = None,
+    model: str | None = None,
 ) -> DiscoveryResult:
     """Run a single Claude query to discover one improvement plan."""
     target_dir = cwd or os.getcwd()
@@ -49,6 +50,9 @@ async def discover_plan(
             "and produce a structured improvement plan."
         ),
     )
+
+    if model:
+        options.model = model
 
     if resume_session_id:
         options.resume = resume_session_id
