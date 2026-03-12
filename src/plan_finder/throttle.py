@@ -39,15 +39,17 @@ def detect_session() -> dict:
     """
     try:
         json_result = subprocess.run(
-            ["ccusage", "blocks", "--json"],
+            ["ccusage", "blocks", "--json", "--active", "--offline"],
             capture_output=True,
             text=True,
-            timeout=15,
+            timeout=30,
         )
     except FileNotFoundError:
         raise CcusageNotInstalled(
             "ccusage is required but not installed. Install it with: brew install ccusage"
         )
+    except subprocess.TimeoutExpired:
+        raise NoActiveSession("ccusage timed out (30s). Skipping session detection.")
 
     if json_result.returncode != 0:
         raise CcusageNotInstalled(
