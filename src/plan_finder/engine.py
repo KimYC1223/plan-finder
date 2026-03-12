@@ -154,7 +154,7 @@ async def run_discovery_loop(
             await _wait_if_quiet_hours()
 
             # Auto-reinit throttle if session expired (crossed 5h boundary)
-            if throttle:
+            if throttle and throttle.session_ready:
                 from datetime import datetime
                 if datetime.now() > throttle.session_end:
                     display.console.print(

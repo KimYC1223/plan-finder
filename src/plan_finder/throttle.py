@@ -10,14 +10,22 @@ from __future__ import annotations
 
 import json
 import subprocess
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from . import display
 
 DEFAULT_SESSION_BUDGET = 40.0  # $40 per session
 
 
-def detect_session() -> dict | None:
+class CcusageNotInstalled(RuntimeError):
+    """ccusage CLI is not installed."""
+
+
+class NoActiveSession(RuntimeError):
+    """ccusage found no active session block."""
+
+
+def detect_session() -> dict:
     """Auto-detect current session info from ccusage.
 
     Returns dict with keys:
@@ -26,7 +34,8 @@ def detect_session() -> dict | None:
       cost_usd: float (cost already spent in this session)
       models: list[str] (models used in this session)
 
-    Returns None if ccusage is unavailable or no active session found.
+    Raises CcusageNotInstalled if ccusage is missing.
+    Raises NoActiveSession if no active block found.
     """
     try:
         json_result = subprocess.run(
@@ -35,37 +44,41 @@ def detect_session() -> dict | None:
             text=True,
             timeout=15,
         )
-        if json_result.returncode != 0:
-            return None
-
-        data = json.loads(json_result.stdout)
-        active_block = None
-
-        for block in data.get("blocks", []):
-            if block.get("isActive"):
-                active_block = block
-
-        if active_block is None:
-            return None
-
-        start_utc = datetime.fromisoformat(
-            active_block["startTime"].replace("Z", "+00:00")
+    except FileNotFoundError:
+        raise CcusageNotInstalled(
+            "ccusage is required but not installed. Install it with: brew install ccusage"
         )
-        end_utc = datetime.fromisoformat(
-            active_block["endTime"].replace("Z", "+00:00")
+
+    if json_result.returncode != 0:
+        raise CcusageNotInstalled(
+            f"ccusage exited with code {json_result.returncode}: {json_result.stderr.strip()}"
         )
-        session_start = start_utc.astimezone().replace(tzinfo=None)
-        session_end = end_utc.astimezone().replace(tzinfo=None)
 
-        return {
-            "session_start": session_start,
-            "session_end": session_end,
-            "cost_usd": active_block.get("costUSD", 0.0),
-            "models": active_block.get("models", []),
-        }
+    data = json.loads(json_result.stdout)
+    active_block = None
 
-    except (FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError, KeyError):
-        return None
+    for block in data.get("blocks", []):
+        if block.get("isActive"):
+            active_block = block
+
+    if active_block is None:
+        raise NoActiveSession("No active session found via ccusage.")
+
+    start_utc = datetime.fromisoformat(
+        active_block["startTime"].replace("Z", "+00:00")
+    )
+    end_utc = datetime.fromisoformat(
+        active_block["endTime"].replace("Z", "+00:00")
+    )
+    session_start = start_utc.astimezone().replace(tzinfo=None)
+    session_end = end_utc.astimezone().replace(tzinfo=None)
+
+    return {
+        "session_start": session_start,
+        "session_end": session_end,
+        "cost_usd": active_block.get("costUSD", 0.0),
+        "models": active_block.get("models", []),
+    }
 
 
 class SessionThrottle:
@@ -80,14 +93,21 @@ class SessionThrottle:
         self._init_session()
 
     def _init_session(self) -> None:
-        session_info = detect_session()
+        """Detect session via ccusage.
 
-        if session_info is None:
-            raise RuntimeError(
-                "ccusage is required but not available. "
-                "Install it with: brew install ccusage"
+        Raises CcusageNotInstalled if ccusage is missing.
+        On NoActiveSession, sets session_ready=False (throttle disabled).
+        """
+        try:
+            session_info = detect_session()
+        except NoActiveSession:
+            self.session_ready = False
+            display.console.print(
+                "[dim]No active session yet — throttle disabled until session starts.[/dim]"
             )
+            return
 
+        self.session_ready = True
         self.session_start = session_info["session_start"]
         self.session_end = session_info["session_end"]
         self.session_duration = self.session_end - self.session_start
@@ -127,6 +147,8 @@ class SessionThrottle:
         return self.cumulative_cost / self.session_budget
 
     def is_allowed(self) -> bool:
+        if not self.session_ready:
+            return True
         return self._usage_ratio() * 1.05 < self._elapsed_ratio()
 
     def seconds_until_allowed(self) -> float:
@@ -161,6 +183,10 @@ class SessionThrottle:
             display.console.print("[dim]Throttle wait done, resuming...[/dim]")
 
     def status_line(self) -> str:
+        if not self.session_ready:
+            model_str = f" | Model: {self.model}" if self.model else ""
+            return f"No active session — throttle disabled{model_str}"
+
         usage = self._usage_ratio()
         elapsed = self._elapsed_ratio()
         pace = usage * 1.05
