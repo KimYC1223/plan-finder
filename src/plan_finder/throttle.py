@@ -71,10 +71,8 @@ def detect_session() -> dict | None:
 class SessionThrottle:
     def __init__(
         self,
-        session_duration_hours: float = 5.0,
         session_budget: float = DEFAULT_SESSION_BUDGET,
     ) -> None:
-        self._fallback_hours = session_duration_hours
         self.session_budget = session_budget
         self.cumulative_cost: float = 0.0
         self.cumulative_tokens: int = 0
@@ -84,29 +82,25 @@ class SessionThrottle:
     def _init_session(self) -> None:
         session_info = detect_session()
 
-        if session_info:
-            self.session_start = session_info["session_start"]
-            self.session_end = session_info["session_end"]
-            self.session_duration = self.session_end - self.session_start
-            self.cumulative_cost = session_info["cost_usd"]
-            models = [m for m in session_info.get("models", []) if m != "<synthetic>"]
-            if models and self.model is None:
-                self.model = models[0]
-            display.console.print(
-                f"[dim]Session detected via ccusage: "
-                f"{self.session_start.strftime('%H:%M')} ~ "
-                f"{self.session_end.strftime('%H:%M')}, "
-                f"${self.cumulative_cost:.2f}/${self.session_budget:.0f} spent[/dim]"
+        if session_info is None:
+            raise RuntimeError(
+                "ccusage is required but not available. "
+                "Install it with: brew install ccusage"
             )
-        else:
-            self.session_duration = timedelta(hours=self._fallback_hours)
-            self.session_start = datetime.now()
-            self.session_end = self.session_start + self.session_duration
-            display.console.print(
-                "[dim]ccusage not available, using defaults: "
-                f"{self._fallback_hours}h session, "
-                f"${self.session_budget:.0f} budget[/dim]"
-            )
+
+        self.session_start = session_info["session_start"]
+        self.session_end = session_info["session_end"]
+        self.session_duration = self.session_end - self.session_start
+        self.cumulative_cost = session_info["cost_usd"]
+        models = [m for m in session_info.get("models", []) if m != "<synthetic>"]
+        if models and self.model is None:
+            self.model = models[0]
+        display.console.print(
+            f"[dim]Session detected via ccusage: "
+            f"{self.session_start.strftime('%H:%M')} ~ "
+            f"{self.session_end.strftime('%H:%M')}, "
+            f"${self.cumulative_cost:.2f}/${self.session_budget:.0f} spent[/dim]"
+        )
 
     def reinit(self) -> None:
         """Re-detect session info (e.g. after session reset)."""

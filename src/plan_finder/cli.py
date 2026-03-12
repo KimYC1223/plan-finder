@@ -47,13 +47,6 @@ def main(
             help="Auto mode: find plans unattended and save to pending/. Requires --prompt.",
         ),
     ] = False,
-    session_hours: Annotated[
-        float,
-        typer.Option(
-            "--session-hours",
-            help="Session duration in hours (fallback when ccusage unavailable).",
-        ),
-    ] = 5.0,
     session_budget: Annotated[
         float,
         typer.Option(
@@ -147,7 +140,6 @@ def main(
     from .throttle import SessionThrottle
 
     session_throttle = SessionThrottle(
-        session_duration_hours=session_hours,
         session_budget=session_budget,
     )
 
