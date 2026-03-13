@@ -18,7 +18,7 @@ uv sync
 - Python 3.10+
 - [uv](https://docs.astral.sh/uv/) 패키지 매니저
 - [Claude CLI](https://docs.anthropic.com/en/docs/claude-code) 인증 완료 (claude-agent-sdk가 사용)
-- (선택) [ccusage](https://github.com/ryoppippi/ccusage) — 세션 비용 자동 감지에 사용. 없으면 fallback 값 사용
+- (선택) [ccusage](https://github.com/ryoppippi/ccusage) — 세션 비용 자동 감지에 사용. 없으면 쓰로틀 비활성화
 
 ## 빠른 시작
 
@@ -115,7 +115,7 @@ Cost: $12.50/$40 (31%) | Session: 52% (2.4h left) | 🟢 Plenty (pace 33% vs tim
 | `--auto` | | 자동 모드 | 꺼짐 |
 | `--no-throttle` | | 쓰로틀링 비활성화 | 꺼짐 (기본 활성) |
 | `--session-budget` | | 세션 예산 (USD) | 40.0 |
-| `--session-hours` | | 세션 시간 (ccusage 없을 때 fallback) | 5.0 |
+| `--model` | | Claude 모델 지정 (e.g. `claude-opus-4-6`) | SDK 기본값 |
 | `--stop-at` | | 지정 시각에 종료 (HH:MM) | 없음 |
 | `--no-resume` | | 반복 간 Claude 세션 초기화 | 꺼짐 (세션 유지) |
 | `--clear-rejections` | | 거절 기록 초기화 후 시작 | |
