@@ -18,7 +18,7 @@ uv sync
 - Python 3.10+
 - [uv](https://docs.astral.sh/uv/) 패키지 매니저
 - [Claude CLI](https://docs.anthropic.com/en/docs/claude-code) 인증 완료 (claude-agent-sdk가 사용)
-- (선택) [ccusage](https://github.com/ryoppippi/ccusage) — 세션 비용 자동 감지에 사용. 없으면 쓰로틀 비활성화
+- [ccusage](https://github.com/ryoppippi/ccusage) — 세션 비용 자동 감지에 사용 (`brew install ccusage`)
 
 ## 빠른 시작
 
@@ -127,9 +127,8 @@ Cost: $12.50/$40 (31%) | Session: 52% (2.4h left) | 🟢 Plenty (pace 33% vs tim
 └── my-project/
     ├── .state.json                          # 거절/승인/보류 기록 + 통계
     ├── 20260210_143522_fix-null-check.md    # 승인된 plan
-    ├── pending/
-    │   └── 20260210_030105_refactor-api.md  # 자동 모드에서 저장된 plan (검토 대기)
-    └── logs/
+    └── pending/
+        └── 20260210_030105_refactor-api.md  # 자동 모드에서 저장된 plan (검토 대기)
 ```
 
 ## 동작 원리
