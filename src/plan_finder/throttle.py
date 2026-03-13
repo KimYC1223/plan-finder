@@ -52,8 +52,8 @@ def detect_session() -> dict:
         raise NoActiveSession("ccusage timed out (30s). Skipping session detection.")
 
     if json_result.returncode != 0:
-        raise CcusageNotInstalled(
-            f"ccusage exited with code {json_result.returncode}: {json_result.stderr.strip()}"
+        raise NoActiveSession(
+            f"ccusage exited with code {json_result.returncode}: {json_result.stderr.strip()[:200]}"
         )
 
     data = json.loads(json_result.stdout)
