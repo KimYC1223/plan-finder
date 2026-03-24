@@ -98,8 +98,6 @@ def main(
     """
     import os
 
-    from rich.prompt import Prompt
-
     from .display import console, show_rejected_list
     from .state import StateManager
 
@@ -129,10 +127,12 @@ def main(
     # Prompt required: ask interactively if not provided via --prompt
     if prompt is None:
         console.print()
-        prompt = Prompt.ask(
+        console.print(
             "[bold]Enter your plan prompt[/bold]\n"
             "[dim](e.g. 'Find any improvement and propose a plan')[/dim]"
         )
+        from .display import _raw_input
+        prompt = _raw_input(": ")
         if not prompt.strip():
             console.print("[red]Prompt is required. Exiting.[/red]")
             raise typer.Exit(1)
