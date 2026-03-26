@@ -256,9 +256,8 @@ async def run_discovery_loop(
             if result.session_id:
                 session_id = result.session_id
 
-            # Log tool call count for diagnostics
             display.console.print(
-                f"  [dim]Tool calls: {result.num_tool_calls} | "
+                f"  [dim]Turns: {result.num_turns} | "
                 f"Cost: ${result.cost_usd:.2f} | "
                 f"Tokens: {result.total_tokens:,}[/dim]"
             )
