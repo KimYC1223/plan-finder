@@ -256,6 +256,13 @@ async def run_discovery_loop(
             if result.session_id:
                 session_id = result.session_id
 
+            # Log tool call count for diagnostics
+            display.console.print(
+                f"  [dim]Tool calls: {result.num_tool_calls} | "
+                f"Cost: ${result.cost_usd:.2f} | "
+                f"Tokens: {result.total_tokens:,}[/dim]"
+            )
+
             # Track usage for throttle
             if throttle:
                 throttle.add_usage(result.cost_usd, result.total_tokens, result.model)

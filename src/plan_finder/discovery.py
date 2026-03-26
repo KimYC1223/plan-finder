@@ -22,6 +22,7 @@ class DiscoveryResult:
     total_tokens: int
     session_id: str | None
     model: str | None = None
+    num_tool_calls: int = 0
 
 
 async def discover_plan(
@@ -62,16 +63,17 @@ async def discover_plan(
     tokens: int = 0
     session_id: str | None = None
     model: str | None = None
+    tool_calls: int = 0
 
     async for message in query(prompt=prompt, options=options):
         if isinstance(message, AssistantMessage):
             if model is None:
                 model = message.model
-            if on_activity:
-                for block in message.content:
-                    if isinstance(block, ToolUseBlock):
-                        tool_input = block.input
-                        detail = _summarize_tool(block.name, tool_input)
+            for block in message.content:
+                if isinstance(block, ToolUseBlock):
+                    tool_calls += 1
+                    if on_activity:
+                        detail = _summarize_tool(block.name, block.input)
                         on_activity(detail)
         elif isinstance(message, ResultMessage):
             cost = message.total_cost_usd or 0.0
@@ -89,7 +91,7 @@ async def discover_plan(
 
     return DiscoveryResult(
         plan=plan, cost_usd=cost, total_tokens=tokens, session_id=session_id,
-        model=model,
+        model=model, num_tool_calls=tool_calls,
     )
 
 
