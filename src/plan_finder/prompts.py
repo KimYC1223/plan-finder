@@ -23,15 +23,24 @@ PREVIOUSLY REJECTED PLANS (do NOT suggest these or similar ideas again):
 """
 
 
+MAX_REJECTIONS_IN_PROMPT = 50
+
+
 def build_prompt(
     user_prompt: str,
     rejected_plans: list[RejectionRecord],
 ) -> str:
     """Wrap user prompt with system instructions and rejection context."""
     if rejected_plans:
+        recent = rejected_plans[-MAX_REJECTIONS_IN_PROMPT:]
         lines = []
-        for i, r in enumerate(rejected_plans, 1):
-            lines.append(f"  {i}. [{r.category}] {r.title}: {r.description_summary}")
+        if len(rejected_plans) > MAX_REJECTIONS_IN_PROMPT:
+            lines.append(
+                f"  (showing {MAX_REJECTIONS_IN_PROMPT} most recent "
+                f"of {len(rejected_plans)} total)"
+            )
+        for i, r in enumerate(recent, 1):
+            lines.append(f"  {i}. [{r.category}] {r.title}")
         rejection_text = _REJECTION_CONTEXT_TEMPLATE.format(
             rejections="\n".join(lines)
         )

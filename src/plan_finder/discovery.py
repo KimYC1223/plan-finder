@@ -31,6 +31,7 @@ async def discover_plan(
     resume_session_id: str | None = None,
     on_activity: Callable[[str], None] | None = None,
     model: str | None = None,
+    max_turns: int = 80,
 ) -> DiscoveryResult:
     """Run a single Claude query to discover one improvement plan."""
     target_dir = cwd or os.getcwd()
@@ -39,7 +40,7 @@ async def discover_plan(
         allowed_tools=["Read", "Glob", "Grep", "WebSearch", "Bash"],
         permission_mode="bypassPermissions",
         cwd=target_dir,
-        max_turns=200,
+        max_turns=max_turns,
         output_format={
             "type": "json_schema",
             "schema": DiscoveredPlan.model_json_schema(),

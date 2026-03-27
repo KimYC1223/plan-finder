@@ -184,10 +184,22 @@ def show_rejected_list(rejected_plans: list[RejectionRecord]) -> None:
     """Show a summary of previously rejected plans."""
     if not rejected_plans:
         return
+
+    from .prompts import MAX_REJECTIONS_IN_PROMPT
+
+    total = len(rejected_plans)
+    used = min(total, MAX_REJECTIONS_IN_PROMPT)
     console.print(
-        f"\n[bold yellow]Previously rejected plans ({len(rejected_plans)}):[/bold yellow]"
+        f"\n[bold yellow]Previously rejected plans ({total}):[/bold yellow]"
     )
-    for i, r in enumerate(rejected_plans, 1):
+    if total > MAX_REJECTIONS_IN_PROMPT:
+        console.print(
+            f"  [dim]({total - used} older plans omitted, "
+            f"most recent {used} will be sent to Claude)[/dim]"
+        )
+    shown = rejected_plans[-MAX_REJECTIONS_IN_PROMPT:]
+    offset = max(0, total - MAX_REJECTIONS_IN_PROMPT)
+    for i, r in enumerate(shown, offset + 1):
         reason_str = f" — {rich_escape(r.reason)}" if r.reason else ""
         console.print(
             f"  [dim]{i}.[/dim] [{rich_escape(r.category)}] "

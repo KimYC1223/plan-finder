@@ -98,6 +98,7 @@ async def run_discovery_loop(
     resume: bool = True,
     stop_at: object | None = None,  # datetime.time
     model: str | None = None,
+    max_turns: int = 80,
 ) -> None:
     """Main discovery loop.
 
@@ -124,11 +125,14 @@ async def run_discovery_loop(
     state_mgr = StateManager(report_dir)
     state_mgr.load()
 
+    from datetime import datetime as _dt
+
     iteration = 0
     session_approved = 0
     session_rejected = 0
     session_pending = 0
     session_id: str | None = None
+    session_start_time = _dt.now()
     consecutive_errors = 0
 
     try:
@@ -175,7 +179,16 @@ async def run_discovery_loop(
                     f"  [dim]Resuming session {session_id[:8]}...[/dim]"
                 )
 
-            prompt = build_prompt(plan_prompt, state_mgr.state.rejected_plans)
+            if session_id and resume:
+                # Claude already knows the full list from the first iteration.
+                # Only include plans discovered during this session.
+                new_plans = [
+                    r for r in state_mgr.state.rejected_plans
+                    if r.rejected_at > session_start_time
+                ]
+                prompt = build_prompt(plan_prompt, new_plans)
+            else:
+                prompt = build_prompt(plan_prompt, state_mgr.state.rejected_plans)
 
             resume_id = session_id if resume else None
 
@@ -191,6 +204,7 @@ async def run_discovery_loop(
                         resume_session_id=resume_id,
                         on_activity=on_activity,
                         model=model,
+                        max_turns=max_turns,
                     )
             except Exception as e:
                 err_msg = str(e)
@@ -200,6 +214,7 @@ async def run_discovery_loop(
                     )
                     await _wait_for_next_session(throttle)
                     session_id = None
+                    session_start_time = _dt.now()
                     if throttle:
                         throttle.reinit()
                     consecutive_errors = 0
@@ -210,6 +225,7 @@ async def run_discovery_loop(
                         f"\n[yellow]Session context too large. Resetting session and retrying...[/yellow]"
                     )
                     session_id = None
+                    session_start_time = _dt.now()
                     iteration -= 1
                     continue
                 # Retriable errors (e.g. exit code 1 from CLI = likely rate limit)
@@ -226,6 +242,7 @@ async def run_discovery_loop(
                         )
                         await _wait_for_next_session(throttle)
                         session_id = None
+                        session_start_time = _dt.now()
                         if throttle:
                             throttle.reinit()
                         consecutive_errors = 0
@@ -238,6 +255,7 @@ async def run_discovery_loop(
                     import asyncio
                     await asyncio.sleep(30)
                     session_id = None
+                    session_start_time = _dt.now()
                     iteration -= 1
                     continue
                 # Unknown error: log and stop gracefully
@@ -326,6 +344,7 @@ async def run_discovery_loop(
                                     resume_session_id=session_id,
                                     on_activity=on_revise_activity,
                                     model=model,
+                                    max_turns=max_turns,
                                 )
                         except Exception as e:
                             err_msg = str(e)
@@ -338,6 +357,7 @@ async def run_discovery_loop(
                                 )
                                 await _wait_for_next_session(throttle)
                                 session_id = None
+                                session_start_time = _dt.now()
                                 if throttle:
                                     throttle.reinit()
                                 break

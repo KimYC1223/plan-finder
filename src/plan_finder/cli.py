@@ -82,6 +82,13 @@ def main(
             help="Claude model to use (e.g. claude-opus-4-6, claude-sonnet-4-5-20250929).",
         ),
     ] = None,
+    max_turns: Annotated[
+        int,
+        typer.Option(
+            "--max-turns",
+            help="Max turns per Claude query. Default 80.",
+        ),
+    ] = 80,
     clear_rejections: Annotated[
         bool,
         typer.Option(
@@ -175,6 +182,7 @@ def main(
             resume=not no_resume,
             stop_at=stop_at_time,
             model=model,
+            max_turns=max_turns,
         )
     )
 
