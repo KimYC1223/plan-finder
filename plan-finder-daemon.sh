@@ -72,7 +72,8 @@ run_daemon() {
             fi
         fi
 
-        log "Starting plan-finder..."
+        log "Starting plan-finder with args: ${PF_ARGS[*]}"
+        log "CWD: ${CWD:-$HOME}"
 
         cd "${CWD:-$HOME}"
         uv run --project "$SCRIPT_DIR" plan-finder "${PF_ARGS[@]}" >> "$LOG_FILE" 2>&1
