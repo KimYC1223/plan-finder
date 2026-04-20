@@ -25,6 +25,9 @@ class DiscoveryResult:
     num_turns: int = 0
 
 
+QUERY_TIMEOUT_SECONDS = 30 * 60  # 30 minutes per query
+
+
 async def discover_plan(
     prompt: str,
     cwd: str | None = None,
@@ -34,6 +37,8 @@ async def discover_plan(
     max_turns: int = 80,
 ) -> DiscoveryResult:
     """Run a single Claude query to discover one improvement plan."""
+    import asyncio
+
     target_dir = cwd or os.getcwd()
 
     options = ClaudeAgentOptions(
@@ -59,44 +64,47 @@ async def discover_plan(
     if resume_session_id:
         options.resume = resume_session_id
 
-    plan: DiscoveredPlan | None = None
-    cost: float = 0.0
-    tokens: int = 0
-    session_id: str | None = None
-    model: str | None = None
-    turns: int = 0
+    async def _run_query() -> DiscoveryResult:
+        plan: DiscoveredPlan | None = None
+        cost: float = 0.0
+        tokens: int = 0
+        session_id: str | None = None
+        _model: str | None = None
+        turns: int = 0
 
-    async for message in query(prompt=prompt, options=options):
-        if isinstance(message, AssistantMessage):
-            if model is None:
-                model = message.model
-            has_tool_use = False
-            for block in message.content:
-                if isinstance(block, ToolUseBlock):
-                    has_tool_use = True
-                    if on_activity:
-                        detail = _summarize_tool(block.name, block.input)
-                        on_activity(detail)
-            if has_tool_use:
-                turns += 1
-        elif isinstance(message, ResultMessage):
-            cost = message.total_cost_usd or 0.0
-            session_id = message.session_id
-            if message.usage:
-                u = message.usage
-                tokens = (
-                    u.get("input_tokens", 0)
-                    + u.get("output_tokens", 0)
-                    + u.get("cache_read_input_tokens", 0)
-                    + u.get("cache_creation_input_tokens", 0)
-                )
-            if message.subtype == "success" and message.structured_output:
-                plan = DiscoveredPlan.model_validate(message.structured_output)
+        async for message in query(prompt=prompt, options=options):
+            if isinstance(message, AssistantMessage):
+                if _model is None:
+                    _model = message.model
+                has_tool_use = False
+                for block in message.content:
+                    if isinstance(block, ToolUseBlock):
+                        has_tool_use = True
+                        if on_activity:
+                            detail = _summarize_tool(block.name, block.input)
+                            on_activity(detail)
+                if has_tool_use:
+                    turns += 1
+            elif isinstance(message, ResultMessage):
+                cost = message.total_cost_usd or 0.0
+                session_id = message.session_id
+                if message.usage:
+                    u = message.usage
+                    tokens = (
+                        u.get("input_tokens", 0)
+                        + u.get("output_tokens", 0)
+                        + u.get("cache_read_input_tokens", 0)
+                        + u.get("cache_creation_input_tokens", 0)
+                    )
+                if message.subtype == "success" and message.structured_output:
+                    plan = DiscoveredPlan.model_validate(message.structured_output)
 
-    return DiscoveryResult(
-        plan=plan, cost_usd=cost, total_tokens=tokens, session_id=session_id,
-        model=model, num_turns=turns,
-    )
+        return DiscoveryResult(
+            plan=plan, cost_usd=cost, total_tokens=tokens, session_id=session_id,
+            model=_model, num_turns=turns,
+        )
+
+    return await asyncio.wait_for(_run_query(), timeout=QUERY_TIMEOUT_SECONDS)
 
 
 def _summarize_tool(name: str, inp: dict) -> str:

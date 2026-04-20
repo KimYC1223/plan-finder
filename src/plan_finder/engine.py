@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 from rich.markup import escape as rich_escape
@@ -206,6 +207,14 @@ async def run_discovery_loop(
                         model=model,
                         max_turns=max_turns,
                     )
+            except asyncio.TimeoutError:
+                display.console.print(
+                    "\n[yellow]Query timed out (30 min). Resetting session and retrying...[/yellow]"
+                )
+                session_id = None
+                session_start_time = _dt.now()
+                iteration -= 1
+                continue
             except Exception as e:
                 err_msg = str(e)
                 if _is_rate_limit_error(err_msg):
