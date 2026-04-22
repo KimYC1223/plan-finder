@@ -261,7 +261,6 @@ async def run_discovery_loop(
                     display.console.print(
                         "[dim]Resetting session and retrying in 30s...[/dim]"
                     )
-                    import asyncio
                     await asyncio.sleep(30)
                     session_id = None
                     session_start_time = _dt.now()
