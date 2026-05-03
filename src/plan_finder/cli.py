@@ -138,7 +138,7 @@ def main(
     mgr.load()
     show_rejected_list(mgr.state.rejected_plans)
 
-    from .preset import find_matching_presets, list_presets, load_preset
+    from .preset import list_presets, load_preset
     from .display import _raw_input
 
     # --preset=? : list available presets and exit
@@ -187,49 +187,12 @@ def main(
         console.print("[dim](e.g. performance, code quality, bugs, architecture)[/dim]")
         focus = _raw_input(": ").strip()
 
-        combined_query = f"{project_type} {focus}"
-
-        # Find matching presets
-        if available:
-            matches = find_matching_presets(combined_query, available)
-            top_matches = [(p, s) for p, s in matches if s >= 0.1]
-
-            if top_matches:
-                console.print()
-                if len(top_matches) == 1:
-                    best, _ = top_matches[0]
-                    console.print(
-                        f"[bold yellow]'{best.title}'[/bold yellow] preset looks like a match. "
-                        "Use this preset?"
-                    )
-                    choice = _raw_input("[Y/n]: ").strip().lower()
-                    if choice in ("", "y"):
-                        console.print(f"[bold green]Using preset:[/bold green] {best.title}")
-                        prompt = best.prompt
-                else:
-                    console.print("[bold]Similar presets found:[/bold]")
-                    for i, (p, _) in enumerate(top_matches, 1):
-                        console.print(f"  {i}. [cyan]{p.name}[/cyan] — {p.description}")
-                    console.print("  0. None — use my input directly")
-                    console.print()
-                    raw = _raw_input("Select a number [0]: ").strip()
-                    try:
-                        idx = int(raw) if raw else 0
-                    except ValueError:
-                        idx = 0
-                    if 1 <= idx <= len(top_matches):
-                        chosen, _ = top_matches[idx - 1]
-                        console.print(f"[bold green]Using preset:[/bold green] {chosen.title}")
-                        prompt = chosen.prompt
-
-        # Fallback: build prompt from user's answers
-        if prompt is None:
-            parts = [f"This is a {project_type} project."]
-            if focus:
-                parts.append(f"Focus on {focus}.")
-            else:
-                parts.append("Find general code improvements.")
-            prompt = " ".join(parts)
+        parts = [f"This is a {project_type} project."]
+        if focus:
+            parts.append(f"Focus on {focus}.")
+        else:
+            parts.append("Find general code improvements.")
+        prompt = " ".join(parts)
 
     if not prompt.strip():
         console.print("[red]Prompt is required. Exiting.[/red]")

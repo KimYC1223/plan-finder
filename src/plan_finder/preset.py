@@ -46,15 +46,3 @@ def load_preset(name: str) -> Preset | None:
         return None
     return _parse_preset(path)
 
-
-def find_matching_presets(query: str, presets: list[Preset]) -> list[tuple[Preset, float]]:
-    query_words = set(re.findall(r"\w+", query.lower()))
-    results = []
-    for preset in presets:
-        candidate_text = " ".join([preset.title, preset.description] + preset.tags).lower()
-        candidate_words = set(re.findall(r"\w+", candidate_text))
-        overlap = len(query_words & candidate_words)
-        if overlap > 0:
-            score = overlap / max(len(query_words), 1)
-            results.append((preset, score))
-    return sorted(results, key=lambda x: x[1], reverse=True)
