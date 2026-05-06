@@ -28,7 +28,7 @@ def main(
         Optional[str],
         typer.Option(
             "--preset",
-            help="Preset name to use (e.g. unity, scalar). Lists available presets if value is '?'.",
+            help="Preset name to use (e.g. unity). Lists available presets if value is '?'.",
         ),
     ] = None,
     max_iterations: Annotated[
@@ -152,8 +152,8 @@ def main(
                 console.print(f"  [cyan]{p.name}[/cyan] — {p.description}")
         raise typer.Exit(0)
 
-    # --preset=<name> : load preset directly
-    if preset is not None and prompt is None:
+    # --preset=<name> : load preset (alone, or combined with --prompt)
+    if preset is not None:
         loaded = load_preset(preset)
         if loaded is None:
             available = list_presets()
@@ -163,7 +163,11 @@ def main(
                 console.print(f"[dim]Available: {names}[/dim]")
             raise typer.Exit(1)
         console.print(f"\n[bold green]Using preset:[/bold green] {loaded.title}")
-        prompt = loaded.prompt
+        if prompt is None:
+            prompt = loaded.prompt
+        else:
+            console.print("[dim]Combining preset with --prompt (preset first, then --prompt).[/dim]")
+            prompt = f"{loaded.prompt}\n\n{prompt}"
 
     # No prompt and no preset: interactive flow
     if prompt is None:
